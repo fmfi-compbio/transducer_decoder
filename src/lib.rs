@@ -5,13 +5,6 @@ extern crate ndarray;
 extern crate kth;
 extern crate libc;
 
-//mod matrix_load;
-//mod gru_layer;
-//mod approx;
-
-//use matrix_load::*;
-//use gru_layer::*;
-
 use libc::{c_float, c_int, c_longlong, c_void};
 use ndarray::{Array, Axis, Ix1, Ix2, ArrayBase, Data, ArrayView, ArrayViewMut};
 use std::error::Error;
@@ -19,8 +12,7 @@ use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::ptr;
-use ndarray::linalg::general_mat_vec_mul;
-//use approx::*;
+use ndarray::linalg::general_mat_mul;
 
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
@@ -48,24 +40,8 @@ extern "C" {
     fn vmsExp(n: c_int, a: *const c_float, y: *mut c_float, mode: c_longlong);
 }
 
-
-
-static mut JITTER64_5: *mut c_void = ptr::null_mut();
-static mut SGEMM64_5: SgemmJitKernelT = None;
-static mut JITTER32_64: *mut c_void = ptr::null_mut();
-static mut SGEMM32_64: SgemmJitKernelT = None;
 static mut JITTER48_5: *mut c_void = ptr::null_mut();
 static mut SGEMM48_5: SgemmJitKernelT = None;
-static mut JITTER32_48: *mut c_void = ptr::null_mut();
-static mut SGEMM32_48: SgemmJitKernelT = None;
-static mut JITTER32: *mut c_void = ptr::null_mut();
-static mut SGEMM32: SgemmJitKernelT = None;
-static mut JITTERI32: *mut c_void = ptr::null_mut();
-static mut SGEMMI32: SgemmJitKernelT = None;
-static mut JITTER32_96: *mut c_void = ptr::null_mut();
-static mut SGEMM32_96: SgemmJitKernelT = None;
-static mut JITTER96_5: *mut c_void = ptr::null_mut();
-static mut SGEMM96_5: SgemmJitKernelT = None;
 
 const ALIGN: usize = 64;
 
@@ -90,46 +66,8 @@ pub fn align1d(input: Array<f32, Ix1>) -> Array<f32, Ix1> {
 }
 
 
-fn initialize_jit32() {
+fn initialize_jit() {
     unsafe {
-        JITTER32_48 = ptr::null_mut();
-        // TODO: check
-        let status = mkl_cblas_jit_create_sgemm(
-            &mut JITTER32_48,
-            101,
-            111,
-            111,
-            1,
-            48,
-            32,
-            1.0,
-            32,
-            48,
-            0.0,
-            48,
-        );
-
-        SGEMM32_48 = mkl_jit_get_sgemm_ptr(JITTER32_48);
-
-        JITTER32_96 = ptr::null_mut();
-        // TODO: check
-        let status = mkl_cblas_jit_create_sgemm(
-            &mut JITTER32_96,
-            101,
-            111,
-            111,
-            1,
-            96,
-            32,
-            1.0,
-            32,
-            96,
-            0.0,
-            96,
-        );
-
-        SGEMM32_96 = mkl_jit_get_sgemm_ptr(JITTER32_96);
-
         JITTER48_5 = ptr::null_mut();
         // TODO: check
         let status = mkl_cblas_jit_create_sgemm(
@@ -148,101 +86,6 @@ fn initialize_jit32() {
         );
 
         SGEMM48_5 = mkl_jit_get_sgemm_ptr(JITTER48_5);
-
-        JITTER96_5 = ptr::null_mut();
-        // TODO: check
-        let status = mkl_cblas_jit_create_sgemm(
-            &mut JITTER96_5,
-            101,
-            111,
-            111,
-            1,
-            5,
-            96,
-            1.0,
-            96,
-            5,
-            0.0,
-            5,
-        );
-
-        SGEMM96_5 = mkl_jit_get_sgemm_ptr(JITTER96_5);
-
-
-        JITTER32_64 = ptr::null_mut();
-        // TODO: check
-        let status = mkl_cblas_jit_create_sgemm(
-            &mut JITTER32_64,
-            101,
-            111,
-            111,
-            1,
-            64,
-            32,
-            1.0,
-            32,
-            64,
-            0.0,
-            64,
-        );
-
-        SGEMM32_64 = mkl_jit_get_sgemm_ptr(JITTER32_64);
-
-        JITTER64_5 = ptr::null_mut();
-        // TODO: check
-        let status = mkl_cblas_jit_create_sgemm(
-            &mut JITTER64_5,
-            101,
-            111,
-            111,
-            1,
-            5,
-            64,
-            1.0,
-            64,
-            5,
-            0.0,
-            5,
-        );
-
-        SGEMM64_5 = mkl_jit_get_sgemm_ptr(JITTER64_5);
-        JITTER32 = ptr::null_mut();
-        // TODO: check
-        let status = mkl_cblas_jit_create_sgemm(
-            &mut JITTER32,
-            101,
-            111,
-            111,
-            1,
-            32 * 3,
-            32,
-            1.0,
-            32,
-            32 * 3,
-            0.0,
-            32 * 3,
-        );
-
-        SGEMM32 = mkl_jit_get_sgemm_ptr(JITTER32);
-
-        JITTERI32 = ptr::null_mut();
-        // TODO: check
-        let status = mkl_cblas_jit_create_sgemm(
-            &mut JITTERI32,
-            101,
-            111,
-            111,
-            1,
-            32 * 3,
-            5,
-            1.0,
-            5,
-            32 * 3,
-            0.0,
-            32 * 3,
-        );
-
-        SGEMMI32 = mkl_jit_get_sgemm_ptr(JITTERI32);
     }
 }
 
@@ -278,7 +121,7 @@ impl DecoderTab {
             } else {
               self.tab5.as_mut_ptr().offset((48*5+16)*base_state)
             };
-            SGEMM48_5.unwrap()(JITTER64_5, row.as_mut_ptr(), tabptr,
+            SGEMM48_5.unwrap()(JITTER48_5, row.as_mut_ptr(), tabptr,
                                out.as_mut_ptr());
             let outptr = out.as_mut_ptr();
             let biasptr = tabptr.offset((48*5)); 
@@ -293,31 +136,36 @@ impl DecoderTab {
 #[pymethods]
 impl DecoderTab {
   #[new]
-  fn new(obj: &PyRawObject,
+  fn new(
          tab0: &PyArray2<f32>,
          tab1: &PyArray2<f32>,
          tab2: &PyArray2<f32>,
          tab3: &PyArray2<f32>,
          tab4: &PyArray2<f32>,
          tab5: &PyArray2<f32>,
-         tab: &PyArray2<f32>) {
+         tab: &PyArray2<f32>) -> Self {
 
     unsafe {
-        if JITTER32 == ptr::null_mut() {
-            initialize_jit32();
+        if JITTER48_5 == ptr::null_mut() {
+            initialize_jit();
         }
     }
-    obj.init({
-        DecoderTab { 
-            tab0: align2d(tab0.to_owned_array()),
-            tab1: align2d(tab1.to_owned_array()),
-            tab2: align2d(tab2.to_owned_array()),
-            tab3: align2d(tab3.to_owned_array()),
-            tab4: align2d(tab4.to_owned_array()),
-            tab5: align2d(tab5.to_owned_array()),
-            tab: align2d(tab.to_owned_array()),
-        }  
-    })
+    DecoderTab { 
+        tab0: align2d(tab0.to_owned_array()),
+        tab1: align2d(tab1.to_owned_array()),
+        tab2: align2d(tab2.to_owned_array()),
+        tab3: align2d(tab3.to_owned_array()),
+        tab4: align2d(tab4.to_owned_array()),
+        tab5: align2d(tab5.to_owned_array()),
+        tab: align2d(tab.to_owned_array()),
+    }  
+  }
+
+  fn do_not_call_me(&mut self) {
+      let a1 = Array::from_elem((100, 100), 0.0);
+      let a2 = Array::from_elem((100, 100), 0.0);
+      let mut a3 = Array::from_elem((100, 100), 0.0);
+      general_mat_mul(1.0, &a1, &a2, 0.0, &mut a3); 
   }
 
 
@@ -325,13 +173,11 @@ impl DecoderTab {
     let alphabet: Vec<char> = "NACGT".chars().collect();
     let mut out = align1d(Array::from_elem(5, 0.0));
     
-//    general_mat_vec_mul(1.0, &self.jbhw, &st2, 0.0, &mut b);
-
     let mut outstr = String::new();
     let mut outbases = 0;
     let mut base_state = 0;
 
-    for mut row in data.as_array_mut().outer_iter_mut() {
+    for mut row in unsafe { data.as_array_mut() }.outer_iter_mut() {
         self.inner_step(outbases, base_state, &mut row, &mut out);
         let mut top = 0;
         unsafe {
@@ -355,10 +201,11 @@ impl DecoderTab {
   }
 
 
-    fn beam_search(&mut self, data: &PyArray2<f32>, beam_size: usize, beam_cut_threshold: f32) -> String {
+    fn beam_search(&mut self, data: &PyArray2<f32>, beam_size: usize, beam_cut_threshold: f32) -> (String, String) {
         let alphabet: Vec<char> = "NACGT".chars().collect();
         // (base, what)
         let mut beam_prevs = vec![(0, 0)];
+        let mut beam_max_p = vec![(0.0f32)];
         let mut beam_forward: Vec<[i32; 4]> = vec![[-1, -1, -1, -1]];
         
         let mut beam_state: Vec<(usize, isize)> = vec![(0, 0)];
@@ -367,7 +214,7 @@ impl DecoderTab {
         let mut new_probs = Vec::new();
         let mut pr = align1d(Array::from_elem(5, 0.0));
         
-        for mut row in data.as_array_mut().outer_iter_mut() {
+        for mut row in unsafe { data.as_array_mut() }.outer_iter_mut() {
 //            println!("tick");
             new_probs.clear();
 
@@ -408,6 +255,7 @@ impl DecoderTab {
                         if new_beam == -1 {
                             new_beam = beam_prevs.len() as i32;
                             beam_prevs.push((b, beam));
+                            beam_max_p.push(pr[b]);
                             beam_forward[beam as usize][b-1] = new_beam;
                             beam_forward.push([-1, -1, -1, -1]);
                             beam_state.push((beam_state[beam as usize].0 + 1,
@@ -416,6 +264,7 @@ impl DecoderTab {
                         }
 
                         new_probs.push((new_beam, (base_prob + n_prob) * pr[b], 0.0));
+                        beam_max_p[new_beam as usize] = beam_max_p[new_beam as usize].max(pr[b]);
                     }
                 }
             }
@@ -448,14 +297,21 @@ impl DecoderTab {
 //        println!("search done");
 
         let mut out = String::new();
+        let mut out_p = String::new();
         let mut beam = cur_probs[0].0;
         println!("beam {}", beam);
         while beam != 0 {
             out.push(alphabet[beam_prevs[beam as usize].0]);
+            out_p.push(prob_to_str(beam_max_p[beam as usize]));
             beam = beam_prevs[beam as usize].1;
         }
-        out.chars().rev().collect()
+        (out.chars().rev().collect(), out_p.chars().rev().collect())
     }
+}
+
+fn prob_to_str(x: f32) -> char {
+    let q = (-(1.0-x).log10()*10.0) as u32 + 33;
+    std::char::from_u32(q).unwrap()
 }
 
 #[pymodule]
