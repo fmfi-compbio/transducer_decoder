@@ -208,7 +208,7 @@ impl DecoderTab {
         let mut beam_max_p = vec![(0.0f32)];
         let mut beam_forward: Vec<[i32; 4]> = vec![[-1, -1, -1, -1]];
         
-        let mut beam_state: Vec<(usize, isize)> = vec![(0, 0)];
+        let mut beam_state: Vec<(usize, isize)> = vec![(6, 0)];
 
         let mut cur_probs = vec![(0i32, 0.0, 1.0)];
         let mut new_probs = Vec::new();
@@ -299,7 +299,7 @@ impl DecoderTab {
         let mut out = String::new();
         let mut out_p = String::new();
         let mut beam = cur_probs[0].0;
-        println!("beam {}", beam);
+//        println!("beam {}", beam);
         while beam != 0 {
             out.push(alphabet[beam_prevs[beam as usize].0]);
             out_p.push(prob_to_str(beam_max_p[beam as usize]));
