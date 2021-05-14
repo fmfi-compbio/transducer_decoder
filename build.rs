@@ -20,8 +20,13 @@ fn main() {
                 .args(&["-C", &out_dir])
                 .status().unwrap();
 
-        // Also this
-        // ar -rcT libmerged.a libmkl_sequential.a libmkl_core.a libmkl_intel_ilp64.a
+        Command::new("ar")
+                .arg("-rcT")
+                .arg(&format!("{}/libmerged.a", out_dir))
+                .arg(&format!("{}/libmkl_sequential.a", out_dir))
+                .arg(&format!("{}/libmkl_core.a", out_dir))
+                .arg(&format!("{}/libmkl_intel_ilp64.a", out_dir))
+                .status().unwrap();
     }
 
     // TODO: make this crossplatform?
