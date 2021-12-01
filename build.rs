@@ -30,8 +30,5 @@ fn main() {
     // TODO: make this crossplatform?
 
     println!("cargo:rustc-link-search={}/lib", out_dir);
-    println!("cargo:rustc-link-lib=static-nobundle=merged");
-//    println!("cargo:rustc-link-lib=static-nobundle=mkl_intel_lp64");
-//    println!("cargo:rustc-link-lib=static-nobundle=mkl_sequential");
-//    println!("cargo:rustc-link-lib=static-nobundle=mkl_core");
+    println!("cargo:rustc-link-lib=dylib=merged");
 }

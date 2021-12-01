@@ -1,5 +1,3 @@
-#![feature(static_nobundle)]
-
 #[macro_use(s, array)]
 extern crate ndarray;
 extern crate kth;
